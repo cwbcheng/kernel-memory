@@ -1,0 +1,1 @@
+docker build -t cwb/kernel-memory-server:latest .
