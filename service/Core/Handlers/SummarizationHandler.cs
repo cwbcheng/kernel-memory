@@ -210,7 +210,11 @@ public sealed class SummarizationHandler : IPipelineStepHandler
                 this._log.LogTrace("Summarizing paragraph {0}", index);
 
                 var filledPrompt = summarizationPrompt.Replace("{{$input}}", paragraph, StringComparison.OrdinalIgnoreCase);
-                await foreach (var token in textGenerator.GenerateTextAsync(filledPrompt, new TextGenerationOptions()).ConfigureAwait(false))
+                await foreach (var token in textGenerator.GenerateTextAsync(filledPrompt, new TextGenerationOptions()
+                {
+                    Temperature = 1,
+                    NucleusSampling = 1
+                }).ConfigureAwait(false))
                 {
                     newContent.Append(token);
                 }
