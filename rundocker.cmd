@@ -1,1 +1,1 @@
-docker run -e ASPNETCORE_ENVIRONMENT=Development --volume  C:\Users\Dave\Documents\GitHub\cwbcheng\kernel-memory\service\Service\appsettings.Development.json:/app/appsettings.Development.json -it -d -p 9001:9001 cwb/kernel-memory-server:latest
+docker run --volume C:\Users\Dave\Documents\skDB:/app/data --volume C:\Users\Dave\Documents\GitHub\cwbcheng\kernel-memory\service\Service\appsettings.Production.json:/app/appsettings.Production.json -it -d -p 9001:9001 cwb/kernel-memory-server:latest
