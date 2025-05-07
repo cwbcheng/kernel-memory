@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "103-dotnet-custom-EmbeddingGenerator": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:14358;http://localhost:14367"
+    }
+  }
+}

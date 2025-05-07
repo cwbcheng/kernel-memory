@@ -142,7 +142,30 @@ internal sealed class DiskFileSystem : IFileSystem
         path = Path.Join(path, relPath, fileName);
         this._log.LogTrace("Writing file to {0}", path);
         BinaryData data = await BinaryData.FromStreamAsync(streamContent, cancellationToken).ConfigureAwait(false);
-        await File.WriteAllBytesAsync(path, data.ToArray(), cancellationToken).ConfigureAwait(false);
+
+        // 重试 3 次，失败抛出异常
+        for (int i = 1; i <= 5; i++)
+        {
+            try
+            {
+                await File.WriteAllBytesAsync(path, data.ToArray(), cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (System.IO.IOException e)
+            {
+                this._log.LogWarning(e, "Failed to write file {0} to {1}, attempt {2}", fileName, path, i + 1);
+                if (i == 5)
+                {
+                    throw;
+                }
+                await Task.Delay(1000 * i, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception e)
+            {
+                this._log.LogError(e, "Failed to write file {0} to {1}, attempt {2}", fileName, path, i + 1);
+                throw;
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -314,12 +337,12 @@ internal sealed class DiskFileSystem : IFileSystem
     private static string ValidatePath(string path)
     {
         // Check invalid chars one at a time for better error messages
-        if (path.Contains('\\', StringComparison.Ordinal))
+        if (Environment.OSVersion.Platform != PlatformID.Win32NT && path.Contains('\\', StringComparison.Ordinal))
         {
             throw new ArgumentException("The path contains some invalid chars: backslash '\\' chars are not allowed");
         }
 
-        if (path.Contains(':', StringComparison.Ordinal))
+        if (Environment.OSVersion.Platform != PlatformID.Win32NT && path.Contains(':', StringComparison.Ordinal))
         {
             throw new ArgumentException("The path contains some invalid chars: colon ':' chars are not allowed");
         }

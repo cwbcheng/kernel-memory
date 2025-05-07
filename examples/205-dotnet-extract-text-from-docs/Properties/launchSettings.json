@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "205-dotnet-extract-text-from-docs": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:14364;http://localhost:14369"
+    }
+  }
+}

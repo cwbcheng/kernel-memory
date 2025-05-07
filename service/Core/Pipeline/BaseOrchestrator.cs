@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -169,26 +170,57 @@ public abstract class BaseOrchestrator : IPipelineOrchestrator, IDisposable
                 throw new InvalidPipelineDataException("The pipeline data is not found");
             }
 
-            BinaryData? content = await BinaryData.FromStreamAsync(await streamableContent.GetStreamAsync().ConfigureAwait(false), cancellationToken)
+            using (var stream = await streamableContent.GetStreamAsync().ConfigureAwait(false)) {
+                // 检查流是否真的可读或有内容，避免 BinaryData.FromStreamAsync 可能因空流或不可读流抛异常
+                if (stream == null || !stream.CanRead)
+                {
+                    throw new InvalidPipelineDataException($"Stream from pipeline status file is null or not readable for index '{index}', documentId '{documentId}'");
+                }
+                // 对于某些流类型，特别是网络流，检查长度可能不可靠或导致问题。
+                // 但对于 FileStream，如果长度为0，可以提前判断。
+                if (stream.CanSeek && stream.Length == 0)
+                {
+                    // 如果文件为空，Deserialize 可能会失败或返回 null，根据业务逻辑处理
+                    throw new InvalidPipelineDataException($"\"Pipeline status file stream is empty for index '{index}', documentId '{documentId}'\"");
+                }
+                BinaryData? content = await BinaryData.FromStreamAsync(stream, cancellationToken)
                 .ConfigureAwait(false);
+                // BinaryData.FromStreamAsync 在流结束时返回的 content 不会是 null，但其内部的字节数组可能是空的。
+                // content.ToMemory().Length == 0 可以用来检查是否为空内容
+                if (content == null || content.ToMemory().Length == 0) // 检查 content 是否为 null 或空
+                {
+                    this.Log.LogWarning("Pipeline data content is null or empty after reading stream for index '{0}', documentId '{1}'", index, documentId);
+                    throw new InvalidPipelineDataException("The pipeline data is null or empty");
+                }
 
-            if (content == null)
-            {
-                throw new InvalidPipelineDataException("The pipeline data is null");
+                var jsonString = content.ToString().RemoveBOM().Trim();
+                if (string.IsNullOrWhiteSpace(jsonString))
+                {
+                    this.Log.LogWarning("Pipeline JSON string is null or whitespace for index '{0}', documentId '{1}'", index, documentId);
+                    throw new InvalidPipelineDataException("The pipeline JSON data is null or whitespace");
+                }
+
+
+                var result = JsonSerializer.Deserialize<DataPipeline>(jsonString);
+
+                if (result == null)
+                {
+                    this.Log.LogWarning("Deserialized pipeline data is null for index '{0}', documentId '{1}'. JSON: {2}", index, documentId, jsonString);
+                    throw new InvalidPipelineDataException("The pipeline data deserializes to a null value");
+                }
+
+                return result;
             }
-
-            var result = JsonSerializer.Deserialize<DataPipeline>(content.ToString().RemoveBOM().Trim());
-
-            if (result == null)
-            {
-                throw new InvalidPipelineDataException("The pipeline data deserializes to a null value");
-            }
-
-            return result;
         }
         catch (DocumentStorageFileNotFoundException)
         {
+            this.Log.LogWarning("Pipeline status file not found for index '{0}', documentId '{1}'", index, documentId);
             throw new PipelineNotFoundException("Pipeline/Document not found");
+        }
+        catch (JsonException ex) // 捕获 JSON 反序列化异常
+        {
+            this.Log.LogError(ex, "Failed to deserialize pipeline status for index '{0}', documentId '{1}'", index, documentId);
+            throw new InvalidPipelineDataException("Failed to deserialize pipeline data.", ex);
         }
     }
 
